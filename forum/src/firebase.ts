@@ -1,6 +1,6 @@
 
-import { initializeApp } from "firebase/app";
-import { getFirestore , doc, setDoc, getDoc} from "firebase/firestore";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword} from "firebase/auth";
 
 const firebaseConfig = {
@@ -13,6 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+
+/*const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();*/
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -36,4 +38,4 @@ export async function testFirestore() {
     // Your Firestore test code here
 }
 
-export { auth, db };
+export { auth , db };
