@@ -6,6 +6,8 @@ export type Comment = {
   content: string;
   creator: string;
   createdAt: Timestamp;
+  isAnswer?: boolean;  // Nytt fält för att markera om det är ett svar
+  answerTo?: string;
 };
 
 export type ThreadCategory = "THREAD" | "QNA";
@@ -17,6 +19,7 @@ export type Thread = {
   creationDate: string;
   description: string;
   creator: string; // UID of the creator
+  locked: boolean;  
 };
 
 export type User = {

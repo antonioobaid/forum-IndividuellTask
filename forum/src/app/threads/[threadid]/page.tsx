@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { db } from '@/firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import Header from '@/components/layout/Header';
-import { Thread, User , Comment } from '@/types/type';
+import { Thread, User, Comment } from '@/types/type';
 
 
 
@@ -21,6 +21,27 @@ const ThreadDetailPage: React.FC = () => {
   const [currentUserUID, setCurrentUserUID] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
+  // Funktion för att låsa/låsa upp tråden
+  const toggleThreadLock = async () => {
+    if (thread) {  // Kontrollera att thread och thread.id finns
+      try {
+        console.log("Thread ID:", thread.id);
+        const threadRef = doc(db, 'threads', thread.id);
+        await updateDoc(threadRef, {
+          locked: !thread.locked
+        });
+        setThread((prevThread) =>
+          prevThread ? { ...prevThread, locked: !prevThread.locked } : null
+        );
+        console.log(`Thread is now ${!thread.locked ? 'locked' : 'unlocked'}`);
+      } catch (error) {
+        console.error('Error updating thread lock status:', error);
+      }
+    } else {
+      console.error("Thread or thread ID is undefined");
+    }
+  };
+  
   useEffect(() => {
     const auth = getAuth();
     onAuthStateChanged(auth, async (user) => {
@@ -28,7 +49,7 @@ const ThreadDetailPage: React.FC = () => {
         setIsLoggedIn(true);
         setCurrentUserUID(user.uid);
 
-        // Fetch the current user's username
+        // Hämta nuvarande användares namn
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
@@ -46,9 +67,11 @@ const ThreadDetailPage: React.FC = () => {
           const threadDoc = await getDoc(doc(db, 'threads', threadId));
           if (threadDoc.exists()) {
             const threadData = threadDoc.data() as Thread;
+            threadData.id = threadDoc.id;
+            console.log("Fetched Thread Data:", threadData);
             setThread(threadData);
 
-            // Fetch the creator's username
+            // Hämta skaparen av tråden
             const userDoc = await getDoc(doc(db, 'users', threadData.creator));
             if (userDoc.exists()) {
               const userData = userDoc.data() as User;
@@ -71,27 +94,29 @@ const ThreadDetailPage: React.FC = () => {
             where('threadId', '==', threadId)
           );
           const commentsSnapshot = await getDocs(commentsQuery);
-          const commentsData = commentsSnapshot.docs.map(doc => {
+          const commentsData = commentsSnapshot.docs.map((doc) => {
             const data = doc.data();
             return {
               id: doc.id,
               ...data,
-              createdAt: (data.createdAt as Timestamp) || Timestamp.now()
+              createdAt: (data.createdAt as Timestamp) || Timestamp.now(),
             };
           }) as Comment[];
           setComments(commentsData);
 
-          // Fetch usernames for each comment creator
+          // Hämta användarnamn för varje kommentarsskapare
           const usernamesMap: { [key: string]: string } = {};
-          await Promise.all(commentsData.map(async (comment) => {
-            if (!usernamesMap[comment.creator]) {
-              const userDoc = await getDoc(doc(db, 'users', comment.creator));
-              if (userDoc.exists()) {
-                const userData = userDoc.data() as User;
-                usernamesMap[comment.creator] = userData.userName;
+          await Promise.all(
+            commentsData.map(async (comment) => {
+              if (!usernamesMap[comment.creator]) {
+                const userDoc = await getDoc(doc(db, 'users', comment.creator));
+                if (userDoc.exists()) {
+                  const userData = userDoc.data() as User;
+                  usernamesMap[comment.creator] = userData.userName;
+                }
               }
-            }
-          }));
+            })
+          );
           setUsernames(usernamesMap);
         } catch (error) {
           console.error('Error fetching comments:', error);
@@ -112,25 +137,25 @@ const ThreadDetailPage: React.FC = () => {
           content: newComment,
           createdAt: serverTimestamp(),
           creator: currentUserUID,
-          threadId: threadId
+          threadId: threadId,
         };
         const docRef = await addDoc(collection(db, 'comments'), newCommentData);
         const addedComment = {
           ...newCommentData,
           id: docRef.id,
-          createdAt: Timestamp.now() // Use current timestamp for immediate display
+          createdAt: Timestamp.now(), // Använd aktuell timestamp för omedelbar visning
         } as Comment;
         setComments([...comments, addedComment]);
         setNewComment('');
 
-        // Fetch the username for the new comment creator
+        // Hämta användarnamn för den nya kommentarens skapare
         if (!usernames[currentUserUID]) {
           const userDoc = await getDoc(doc(db, 'users', currentUserUID));
           if (userDoc.exists()) {
             const userData = userDoc.data() as User;
             setUsernames((prevUsernames) => ({
               ...prevUsernames,
-              [currentUserUID]: userData.userName
+              [currentUserUID]: userData.userName,
             }));
           }
         }
@@ -140,7 +165,9 @@ const ThreadDetailPage: React.FC = () => {
     }
   };
 
-  const sortedComments = comments.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
+  const sortedComments = comments.sort(
+    (a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
+  );
 
   return (
     <div>
@@ -149,17 +176,33 @@ const ThreadDetailPage: React.FC = () => {
         {thread ? (
           <div className="bg-white shadow-md rounded-lg p-6 mb-6">
             <h1 className="text-2xl font-bold mb-4 dark:text-black">{thread.title}</h1>
-            <p className="text-gray-700 mb-4" style={{ whiteSpace: 'pre-wrap' }}>{thread.description}</p>
+            <p className="text-gray-700 mb-4" style={{ whiteSpace: 'pre-wrap' }}>
+              {thread.description}
+            </p>
             <p className="text-sm text-gray-500">Created by: {creatorName}</p>
-            <p className="text-sm text-gray-500">Creation Date: {new Date(thread.creationDate).toLocaleString()}</p>
+            <p className="text-sm text-gray-500">
+              Creation Date: {new Date(thread.creationDate).toLocaleString()}
+            </p>
             <p className="text-sm text-gray-500">Category: {thread.category}</p>
+
+            {/* Lås/lås upp knapp, endast synlig för trådskaparen */}
+            {isLoggedIn && currentUserUID === thread.creator && (
+              <button
+                onClick={toggleThreadLock}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium ${
+                  thread.locked ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                } text-white`}
+              >
+                {thread.locked ? 'Unlock Thread' : 'Lock Thread'}
+              </button>
+            )}
           </div>
         ) : (
           <p>Loading thread...</p>
         )}
-        <div>
-          <h2 className="text-xl font-bold mb-4">Comments</h2>
-          {isLoggedIn && (
+
+        {/* Kommentarsformulär, visas bara om tråden inte är låst */}
+        {isLoggedIn && !thread?.locked && (
           <form onSubmit={handleCommentSubmit} className="my-4">
             <textarea
               value={newComment}
@@ -168,22 +211,41 @@ const ThreadDetailPage: React.FC = () => {
               placeholder="Add a comment..."
               required
             />
-            <button type="submit" className="mt-2 bg-blue-500 text-white p-2 px-4 rounded hover:opacity-65">Submit</button>
+            <button type="submit" className="mt-2 bg-blue-500 text-white p-2 px-4 rounded hover:opacity-65">
+              Submit
+            </button>
           </form>
         )}
+
+        {/* Meddelande om tråden är låst */}
+        {thread?.locked && (
+          <p className="text-red-500 mb-4">
+            This thread is locked. No more comments can be added.
+          </p>
+        )}
+
+        <div>
+          <h2 className="text-xl font-bold mb-4">Comments</h2>
           {sortedComments.length > 0 ? (
             sortedComments.map((comment) => (
               <div key={comment.id} className="bg-white shadow-md rounded-lg p-5 px-6 mb-6">
-                <p className="text-gray-800 pb-2" style={{ whiteSpace: 'pre-wrap' }}>{comment.content}</p>
-                <p className="text-sm text-gray-500 font-semibold pb-2">{usernames[comment.creator] || 'Unknown'}</p>
-                <p className="text-gray-500 text-xs">{comment.createdAt.toDate().toLocaleString()}</p>
+                <p className="text-gray-800 pb-2" style={{ whiteSpace: 'pre-wrap' }}>
+                  {comment.content}
+                </p>
+                <p className="text-sm text-gray-500 font-semibold pb-2">
+                  {usernames[comment.creator] || 'Unknown'}
+                </p>
+                <p className="text-gray-500 text-xs">
+                  {comment.createdAt instanceof Timestamp
+                    ? comment.createdAt.toDate().toLocaleString()
+                    : 'Unknown Date'}
+                </p>
               </div>
             ))
           ) : (
             <p>No comments yet.</p>
           )}
         </div>
-
       </div>
     </div>
   );
