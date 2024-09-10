@@ -8,8 +8,6 @@ import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import Header from '@/components/layout/Header';
 import { Thread, User, Comment } from '@/types/type';
 
-
-
 const ThreadDetailPage: React.FC = () => {
   const pathname = usePathname();
   const [thread, setThread] = useState<Thread | null>(null);
@@ -23,7 +21,7 @@ const ThreadDetailPage: React.FC = () => {
 
   // Funktion för att låsa/låsa upp tråden
   const toggleThreadLock = async () => {
-    if (thread) {  // Kontrollera att thread och thread.id finns
+    if (thread) {  
       try {
         console.log("Thread ID:", thread.id);
         const threadRef = doc(db, 'threads', thread.id);
@@ -41,6 +39,49 @@ const ThreadDetailPage: React.FC = () => {
       console.error("Thread or thread ID is undefined");
     }
   };
+
+  const markAsAnswer = async (commentId: string) => {
+    if (!currentUserUID || !currentUserName) {
+      console.error('No user logged in');
+      return;
+    }
+  
+    try {
+      const commentRef = doc(db, 'comments', commentId);
+      const commentDoc = await getDoc(commentRef);
+  
+      if (commentDoc.exists()) {
+        const commentData = commentDoc.data() as Comment;
+  
+        // Kontrollera om den inloggade användaren är skaparen av kommentaren
+        if (commentData.creator !== currentUserUID) {
+          await updateDoc(commentRef, {
+            isAnswer: true,
+            answeredBy: currentUserUID,
+            answeredByName: currentUserName,
+          });
+  
+          // Uppdatera state så att det reflekterar förändringen direkt i UI
+          setComments((prevComments) =>
+            prevComments.map((comment) =>
+              comment.id === commentId
+                ? { ...comment, isAnswer: true, answeredByName: currentUserName }
+                : comment
+            )
+          );
+  
+          console.log(`Comment ${commentId} marked as answer by ${currentUserName}.`);
+        } else {
+          console.log("You cannot mark your own comment as an answer.");
+        }
+      } else {
+        console.log("Comment does not exist.");
+      }
+    } catch (error) {
+      console.error('Error marking comment as answer:', error);
+    }
+  };
+  
   
   useEffect(() => {
     const auth = getAuth();
@@ -100,6 +141,7 @@ const ThreadDetailPage: React.FC = () => {
               id: doc.id,
               ...data,
               createdAt: (data.createdAt as Timestamp) || Timestamp.now(),
+              isAnswer: data.isAnswer || false,
             };
           }) as Comment[];
           setComments(commentsData);
@@ -235,11 +277,28 @@ const ThreadDetailPage: React.FC = () => {
                 <p className="text-sm text-gray-500 font-semibold pb-2">
                   {usernames[comment.creator] || 'Unknown'}
                 </p>
-                <p className="text-gray-500 text-xs">
+                <p className="text-gray-500 text-xs p-1">
                   {comment.createdAt instanceof Timestamp
                     ? comment.createdAt.toDate().toLocaleString()
                     : 'Unknown Date'}
                 </p>
+
+                {/* Markera som svar knapp, endast synlig om inte redan markerad */}
+                {isLoggedIn && !comment.isAnswer && (
+                  <button
+                    onClick={() => markAsAnswer(comment.id)}
+                    className="bg-yellow-500 text-white p-2 px-4 rounded hover:opacity-80 "
+                  >
+                    Mark as Answer
+                  </button>
+                )}
+
+                {/* Visa om kommentaren är markerad som svar */}
+                {comment.isAnswer && (
+                  <p className="text-green-500 text-xs font-bold">
+                    Marked as answer by {comment.answeredByName}
+                  </p>
+                )}
               </div>
             ))
           ) : (

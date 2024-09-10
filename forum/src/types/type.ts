@@ -6,8 +6,9 @@ export type Comment = {
   content: string;
   creator: string;
   createdAt: Timestamp;
-  isAnswer?: boolean;  // Nytt fält för att markera om det är ett svar
-  answerTo?: string;
+  isAnswer: boolean;
+  answeredBy?: string;
+  answeredByName?: string;
 };
 
 export type ThreadCategory = "THREAD" | "QNA";
