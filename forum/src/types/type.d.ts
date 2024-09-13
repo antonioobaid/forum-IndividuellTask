@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
-export type Comment = {
+ type Comment = {
   id: string;
   threadId: string;
   content: string;
@@ -11,9 +11,9 @@ export type Comment = {
   answeredByName?: string;
 };
 
-export type ThreadCategory = "THREAD" | "QNA";
+type ThreadCategory = "THREAD" | "QNA";
 
-export type Thread = {
+ type Thread = {
   id: string;
   title: string;
   category: ThreadCategory;
@@ -23,7 +23,7 @@ export type Thread = {
   locked: boolean;  
 };
 
-export type User = {
+ type User = {
   id: string;
   firstName: string;
   userName: string;
